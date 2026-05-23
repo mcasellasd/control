@@ -532,6 +532,17 @@ input:checked ~ .live-indicator {
   gap: 1.5rem;
 }
 
+.single-column-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+/* En CSS Grid, els fills poden forçar overflow si no poden reduir amplada */
+.dashboard-sections-grid > * {
+  min-width: 0;
+}
+
 .panel-card {
   background: var(--card-bg);
   backdrop-filter: var(--glass-blur);
@@ -542,6 +553,15 @@ input:checked ~ .live-indicator {
   flex-direction: column;
   gap: 1.5rem;
   box-shadow: var(--shadow-lg);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panel-card canvas {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
 }
 
 .panel-title-container {
@@ -1172,6 +1192,16 @@ input:focus, select:focus, textarea:focus {
   
   .form-row {
     grid-template-columns: 1fr;
+  }
+
+  /* Redueix lleugerament l'alçada de gràfiques en mòbil per evitar saturació visual */
+  #evolutionChartCanvas,
+  #allocationChartCanvas,
+  #globalPerformanceChartCanvas,
+  #accionsPerformanceChartCanvas,
+  #etfsPerformanceChartCanvas,
+  #fonsPerformanceChartCanvas {
+    max-height: 240px;
   }
 }
 

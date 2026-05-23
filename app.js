@@ -11,6 +11,7 @@ const FranklinApp = {
     activeTab: 'resum',
     isSimulating: false,
     simulationInterval: null,
+    marketApiKey: 'd88v7m1r01qs9ff6ba7gd88v7m1r01qs9ff6ba80',
     openaiKey: '',
     openaiModel: 'gpt-4o-mini',
     chatHistory: []
@@ -45,11 +46,11 @@ const FranklinApp = {
     // Actualitzar la interfície de xat de la IA
     this.updateAIChatUI();
     
-    // Auto-activar simulació si estava guardada o per defecte encendre-la per fer-ho dinàmic
+    // Auto-activar actualització en viu si estava guardada o per defecte encendre-la
     const savedSim = localStorage.getItem('franklin_sim_active');
     if (savedSim === 'true' || savedSim === null) {
       document.getElementById('simSwitch').checked = true;
-      // Només simular actius en viu si l'app està desbloquejada
+      // Només actualitzar preus si l'app està desbloquejada
       if (isUnlocked) {
         this.toggleSimulation(true);
       }
@@ -66,28 +67,33 @@ const FranklinApp = {
         this.state = JSON.parse(savedData);
         // Assegurar tab inicial correcte i definició de valors IA per defecte
         this.state.activeTab = 'resum';
+        if (this.state.marketApiKey === undefined) this.state.marketApiKey = 'd88v7m1r01qs9ff6ba7gd88v7m1r01qs9ff6ba80';
         if (this.state.openaiKey === undefined) this.state.openaiKey = '';
         if (this.state.openaiModel === undefined) this.state.openaiModel = 'gpt-4o-mini';
         this.state.chatHistory = []; // Es manté en memòria durant la sessió
       } catch (e) {
         console.error("Error carregant dades del localStorage, restablint...", e);
         this.state = JSON.parse(JSON.stringify(window.FranklinDefaultData));
+        this.state.marketApiKey = 'd88v7m1r01qs9ff6ba7gd88v7m1r01qs9ff6ba80';
         this.state.openaiKey = '';
         this.state.openaiModel = 'gpt-4o-mini';
         this.state.chatHistory = [];
       }
     } else {
       // Carregar dades preconfigurades de Fons
+      let marketKey = 'd88v7m1r01qs9ff6ba7gd88v7m1r01qs9ff6ba80';
       let key = '';
       let model = 'gpt-4o-mini';
       if (savedData) {
         try {
           const parsed = JSON.parse(savedData);
+          marketKey = parsed.marketApiKey || marketKey;
           key = parsed.openaiKey || '';
           model = parsed.openaiModel || 'gpt-4o-mini';
         } catch(e) {}
       }
       this.state = JSON.parse(JSON.stringify(window.FranklinDefaultData));
+      this.state.marketApiKey = marketKey;
       this.state.openaiKey = key;
       this.state.openaiModel = model;
       this.state.chatHistory = [];
@@ -733,23 +739,141 @@ const FranklinApp = {
     this.render();
   },
 
-  // Activar o desactivar simulació dinàmica dels mercats
+  // Activar o desactivar actualització dinàmica dels mercats
   toggleSimulation(active) {
     this.state.isSimulating = active;
     localStorage.setItem('franklin_sim_active', active);
+    const simLabel = document.getElementById('simLabel');
     
     if (active) {
       if (this.simulationInterval) clearInterval(this.simulationInterval);
-      
-      this.simulationInterval = setInterval(() => {
-        this.runSimulationStep();
-      }, 2500); // Actualitzar cada 2.5 segons per dinamisme
+
+      // Si hi ha clau de mercat, fem consulta real; si no, mantenim simulació local
+      if (this.state.marketApiKey && this.state.marketApiKey.trim() !== '') {
+        if (simLabel) simLabel.textContent = 'Cotització en viu';
+        this.fetchRealtimePrices();
+        this.simulationInterval = setInterval(() => {
+          this.fetchRealtimePrices();
+        }, 30000);
+      } else {
+        if (simLabel) simLabel.textContent = 'Simulació en viu';
+        this.simulationInterval = setInterval(() => {
+          this.runSimulationStep();
+        }, 2500);
+      }
     } else {
       if (this.simulationInterval) {
         clearInterval(this.simulationInterval);
         this.simulationInterval = null;
       }
     }
+  },
+
+  // Mapatge de símbols interns al format de Finnhub
+  mapSymbolForFinnhub(symbol) {
+    const mappings = {
+      AAPL: 'AAPL',
+      NVDA: 'NVDA',
+      MSFT: 'MSFT',
+      AMZN: 'AMZN',
+      GOOGL: 'GOOGL',
+      META: 'META',
+      TSLA: 'TSLA',
+      ASML: 'ASML',
+      VWCE: 'VWCE.DE',
+      CSSPX: 'CSPX.L',
+      IWDA: 'IWDA.L',
+      VUSA: 'VUSA.L'
+    };
+    return mappings[symbol] || symbol;
+  },
+
+  // Consulta de preus reals via Finnhub (amb fallback a simulació local)
+  async fetchRealtimePrices() {
+    const apiKey = (this.state.marketApiKey || '').trim();
+    if (!apiKey) {
+      this.runSimulationStep();
+      return;
+    }
+
+    const holdings = this.calculateHoldings().filter(h => h.assetType === 'accion' || h.assetType === 'etf');
+    const symbols = [...new Set(holdings.map(h => h.symbol))];
+    if (symbols.length === 0) {
+      this.runSimulationStep();
+      return;
+    }
+
+    const results = await Promise.allSettled(symbols.map(async (symbol) => {
+      const providerSymbol = this.mapSymbolForFinnhub(symbol);
+      const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(providerSymbol)}&token=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      const current = Number(data.c);
+      const changePercent = Number(data.dp);
+      if (!Number.isFinite(current) || current <= 0 || !Number.isFinite(changePercent)) {
+        throw new Error('Resposta invàlida de preu');
+      }
+      return { symbol, current, changePercent };
+    }));
+
+    let updated = 0;
+    results.forEach((result) => {
+      if (result.status !== 'fulfilled') return;
+
+      const { symbol, current, changePercent } = result.value;
+      if (!this.state.livePrices[symbol]) {
+        this.state.livePrices[symbol] = {
+          current,
+          change: changePercent,
+          currency: 'USD'
+        };
+      }
+
+      const priceObj = this.state.livePrices[symbol];
+      priceObj.current = parseFloat(current.toFixed(2));
+      priceObj.change = parseFloat(changePercent.toFixed(2));
+
+      // Inicialitzar retorns acumulats si encara no existeixen
+      if (priceObj.weekly === undefined) {
+        const hist = this.getHistoricalReturns(symbol);
+        priceObj.weekly = hist.weekly;
+        priceObj.monthly = hist.monthly;
+        priceObj.ytd = hist.ytd;
+        priceObj.annual = hist.annual;
+      }
+
+      // Ajust lleu dels agregats amb el canvi diari real reportat
+      priceObj.weekly = parseFloat((priceObj.weekly + changePercent * 0.4).toFixed(2));
+      priceObj.monthly = parseFloat((priceObj.monthly + changePercent * 0.2).toFixed(2));
+      priceObj.ytd = parseFloat((priceObj.ytd + changePercent * 0.1).toFixed(2));
+      priceObj.annual = parseFloat((priceObj.annual + changePercent * 0.05).toFixed(2));
+
+      // Efecte visual de preu en viu
+      setTimeout(() => {
+        const rows = document.querySelectorAll(`tr[data-symbol="${symbol}"]`);
+        rows.forEach(row => {
+          const priceCell = row.querySelector('.live-price-cell');
+          if (priceCell) {
+            priceCell.classList.remove('flash-up', 'flash-down');
+            void priceCell.offsetWidth;
+            priceCell.classList.add(changePercent >= 0 ? 'flash-up' : 'flash-down');
+          }
+        });
+      }, 0);
+
+      updated += 1;
+    });
+
+    if (updated === 0) {
+      this.runSimulationStep();
+      return;
+    }
+
+    this.saveState();
+    this.render();
   },
 
   // Pas de simulació: altera preus subtilment per fer l'app viva
