@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Franklin Finances - El teu dashboard de finances personalitzat per accions, ETFs, fons d'inversió i estalvi. Controla el teu patrimoni en temps real amb estètica glassmorphism.">
+  <title>Franklin Finances — Dashboard de Gestió Patrimonial i Inversions</title>
+  
+  <!-- Estils generals -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Remix Icons (Llibreria d'icones vectorials premium) -->
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+  
+  <!-- Chart.js (Visualitzacions de dades d'alt rendiment) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Pantalla de Login / Protecció de la Cartera (Es manté visible fins a rebre la contrasenya correcta) -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+      <div class="login-header">
+        <i class="ri-pulse-line login-logo-icon"></i>
+        <h2>Franklin Finances</h2>
+        <p>Aquesta cartera es troba protegida. Introdueix la contrasenya d'accés per obrir el panell de control.</p>
+      </div>
+      <form id="loginForm" onsubmit="FranklinApp.handleLogin(event)">
+        <div class="form-group" style="position: relative; width: 100%;">
+          <input type="password" id="loginPassword" class="form-control" placeholder="Contrasenya d'accés (ex. franklin)" required style="padding-right: 2.5rem; width: 100%; height: 44px;">
+          <i class="ri-lock-password-line" style="position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 1.15rem;"></i>
+        </div>
+        <div id="loginError" class="login-error-msg" style="display: none; width: 100%; margin-top: 0.5rem;">
+          <i class="ri-error-warning-line"></i> Contrasenya incorrecta.
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.25rem; justify-content: center; font-weight: 700; height: 46px;">
+          Desbloquejar Cartera <i class="ri-key-line" style="margin-left: 0.25rem;"></i>
+        </button>
+      </form>
+      <div class="login-footer">
+        Protegit localment mitjançant hash criptogràfic SHA-256
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra Lateral de Navegació (Sidebar) -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <i class="ri-pulse-line"></i>
+      <span>Franklin</span>
+    </div>
+    
+    <nav class="nav-menu">
+      <li class="nav-item active" id="nav-resum">
+        <a href="#resum"><i class="ri-dashboard-3-line"></i> Resum General</a>
+      </li>
+      <li class="nav-item" id="nav-accions">
+        <a href="#accions"><i class="ri-stock-line"></i> Accions</a>
+      </li>
+      <li class="nav-item" id="nav-etfs">
+        <a href="#etfs"><i class="ri-line-chart-line"></i> ETFs</a>
+      </li>
+      <li class="nav-item" id="nav-fons">
+        <a href="#fons"><i class="ri-bank-line"></i> Fons d'Inversió</a>
+      </li>
+      <li class="nav-item" id="nav-transaccions">
+        <a href="#transaccions"><i class="ri-history-line"></i> Transaccions</a>
+      </li>
+      <li class="nav-item" id="nav-objectius">
+        <a href="#objectius"><i class="ri-compass-3-line"></i> Objectius</a>
+      </li>
+      <li class="nav-item" id="nav-configuracio">
+        <a href="#configuracio"><i class="ri-settings-4-line"></i> Configuració</a>
+      </li>
+    </nav>
+    
+    <div class="sidebar-footer">
+      <button class="btn btn-secondary" style="width: 100%; justify-content: center; font-size: 0.8rem;" onclick="FranklinApp.openModal('cashModal')">
+        <i class="ri-wallet-3-line"></i> Ajusta Efectiu
+      </button>
+    </div>
+  </aside>
+
+  <!-- Contingut Principal (Main Content) -->
+  <main class="main-content">
+    
+    <!-- Capçalera (Header) -->
+    <header class="header-container" id="mainHeader">
+      <div class="header-greeting">
+        <h1>Bon dia, Marc</h1>
+        <p>Benvingut a la teva oficina financera. Els mercats es troben operatius.</p>
+      </div>
+      
+      <div class="header-controls">
+        <!-- Tauler de simulació de mercats en viu -->
+        <div class="simulation-panel">
+          <span id="simLabel">Simulació en viu</span>
+          <label class="simulation-switch">
+            <input type="checkbox" id="simSwitch" checked>
+            <span class="slider"></span>
+          </label>
+          <div class="live-indicator"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Resum General del Patrimoni (Net Worth Card) -->
+    <section class="net-worth-card">
+      <div class="net-worth-info">
+        <h2>Patrimoni Total Estimat</h2>
+        <div class="net-worth-amount" id="globalNetWorth">0,00 €</div>
+        <div class="net-worth-change" id="globalDailyChange">
+          <i class="ri-arrow-right-line"></i> 0,00 € (0.00%) avui
+        </div>
+      </div>
+      
+      <div class="net-worth-actions">
+        <button class="btn btn-primary" onclick="FranklinApp.openModal('transactionModal')">
+          <i class="ri-add-line"></i> Nova Transacció
+        </button>
+        <button class="btn btn-secondary" onclick="FranklinApp.openModal('goalModal')">
+          <i class="ri-flag-2-line"></i> Nou Objectiu
+        </button>
+      </div>
+    </section>
+
+    <!-- Targetes KPI de Ràpid Cop d'Ull (KPI Grid) -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Capital Invertit</span>
+          <div class="kpi-icon primary"><i class="ri-safe-2-line"></i></div>
+        </div>
+        <div class="kpi-value" id="kpiInvestit">0,00 €</div>
+        <div class="kpi-footer">Capital actiu en el mercat</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Líquid / Efectiu</span>
+          <div class="kpi-icon amber"><i class="ri-coins-line"></i></div>
+        </div>
+        <div class="kpi-value" id="kpiEfectiu">0,00 €</div>
+        <div class="kpi-footer">Disponible en comptes corrents</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Plusvàlua Latent</span>
+          <div class="kpi-icon emerald"><i class="ri-arrow-up-double-line"></i></div>
+        </div>
+        <div class="kpi-value" id="kpiPlusvalua">0,00 €</div>
+        <div class="kpi-footer">Rendiment net de la cartera</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Rendibilitat Global</span>
+          <div class="kpi-icon purple"><i class="ri-percent-line"></i></div>
+        </div>
+        <div class="kpi-value" id="kpiRendibilitat">0.00%</div>
+        <div class="kpi-footer">Yield ponderat de la cartera</div>
+      </div>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- PESTANYA 1: RESUM GENERAL -->
+    <!-- ============================================== -->
+    <div id="tab-resum" class="tab-content active">
+      <!-- Secció de Visualització (Gràfics) -->
+      <section class="dashboard-sections-grid">
+        <!-- Gràfic de Patrimoni Total (Evolució) -->
+        <div class="panel-card">
+          <div class="panel-title-container">
+            <div>
+              <div class="panel-title">Evolució del Patrimoni</div>
+              <div class="panel-subtitle">Patrimoni net acumulat (Últims 6 mesos)</div>
+            </div>
+          </div>
+          <div style="height: 300px; position: relative;">
+            <canvas id="evolutionChartCanvas"></canvas>
+          </div>
+        </div>
+        
+        <!-- Gràfic d'Assignació d'Actius -->
+        <div class="panel-card">
+          <div class="panel-title-container">
+            <div>
+              <div class="panel-title">Distribució d'Actius</div>
+              <div class="panel-subtitle">Assignació per tipus d'actiu</div>
+            </div>
+          </div>
+          <div style="height: 300px; position: relative;">
+            <canvas id="allocationChartCanvas"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Principals Posicions i Últims Moviments -->
+      <section class="dashboard-sections-grid">
+        <!-- Posicions Lideres -->
+        <div class="panel-card">
+          <div class="panel-title-container">
+            <div>
+              <div class="panel-title">Posicions Principals</div>
+              <div class="panel-subtitle">Els 5 actius amb més valor de la teva cartera</div>
+            </div>
+          </div>
+          <div class="responsive-table-container">
+            <table class="modern-table" id="topAssetsTable">
+              <thead>
+                <tr>
+                  <th>Actiu</th>
+                  <th>Tipus</th>
+                  <th>Unitats</th>
+                  <th>Valor Total</th>
+                  <th>Rendiment</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Carregat dinàmicament per app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mòdul ràpid d'Objectius -->
+        <div class="panel-card">
+          <div class="panel-title-container">
+            <div>
+              <div class="panel-title">Objectiu Destacat</div>
+              <div class="panel-subtitle">Progrés cap als teus objectius</div>
+            </div>
+          </div>
+          <div id="quickGoalWidget" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <!-- Renderitzat amb dades completes a la pestanya corresponent -->
+            <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">Vés a la secció d'<strong>Objectius</strong> per afegir nous reptes financers i veure la llista en detall.</p>
+          </div>
+        </div>
+
+      <!-- Gràfic de Rendiment Global -->
+      <section class="dashboard-sections-grid" style="grid-template-columns: 1fr; margin-top: 1.5rem;">
+        <div class="panel-card">
+          <div class="panel-title-container">
+            <div>
+              <div class="panel-title"><i class="ri-bar-chart-grouped-line" style="color: var(--emerald); margin-right: 0.5rem; vertical-align: middle;"></i>Comparativa de Rendiment Global (%)</div>
+              <div class="panel-subtitle">Rendibilitat mitjana ponderada per cada classe d'actiu</div>
+            </div>
+          </div>
+          <div style="height: 180px; position: relative;">
+            <canvas id="globalPerformanceChartCanvas"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Assessor d'IA integrat a Resum General -->
+      <section class="dashboard-sections-grid" style="grid-template-columns: 1fr; margin-top: 1.5rem;">
+        <div class="panel-card" style="display: flex; flex-direction: column; min-height: 520px;">
+          <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 0.5rem;">
+            <div>
+              <div class="panel-title"><i class="ri-brain-line" style="color: var(--accent-secondary); margin-right: 0.5rem; vertical-align: middle;"></i>Franklin AI — Assessor Financer Intel·ligent</div>
+              <div class="panel-subtitle">Pregunta-li detalls sobre la teva cartera, rebalanceig o viabilitat de metes.</div>
+            </div>
+          </div>
+
+          <!-- Alerta quan no hi ha clau API configurada -->
+          <div id="aiKeyWarning" class="kpi-card" style="padding: 2rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem; margin-top: 1rem; border-color: var(--crimson);">
+            <div class="kpi-icon crimson" style="width: 50px; height: 50px; font-size: 1.75rem; background: var(--crimson-dim); color: var(--crimson);"><i class="ri-key-2-line"></i></div>
+            <div style="font-family: var(--font-heading); font-weight: 700; font-size: 1.2rem;">Falta configurar la teva Clau d'OpenAI</div>
+            <p style="color: var(--text-muted); max-width: 450px; font-size: 0.85rem; line-height: 1.5;">Per poder fer consultes a l'assessor intel·ligent, necessitem que afegeixis la teva clau de l'API d'OpenAI. Es desarà de forma 100% privada i local al teu propi navegador.</p>
+            <button class="btn btn-primary" onclick="FranklinApp.switchTab('configuracio')" style="margin-top: 0.5rem;">
+              Anar a Configuració <i class="ri-arrow-right-line"></i>
+            </button>
+          </div>
+
+          <!-- Pantalla de xat principal, amagada si no hi ha clau -->
+          <div id="aiChatWrapper" style="display: none; flex-direction: column; flex: 1; height: 100%; gap: 1rem; margin-top: 1rem;">
+            <!-- Suggeriments ràpids (Enricat amb 5 botons) -->
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+              <button type="button" class="btn btn-secondary quick-prompt-btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-radius: 20px;" onclick="FranklinApp.sendQuickPrompt('Fes una auditoria completa de la meva cartera de posicions actual.')">
+                🔍 Audita la meva cartera
+              </button>
+              <button type="button" class="btn btn-secondary quick-prompt-btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-radius: 20px;" onclick="FranklinApp.sendQuickPrompt('Tinc prou efectiu i inversió en relació amb els meus objectius? Analitza la viabilitat.')">
+                🎯 Revisa els meus objectius
+              </button>
+              <button type="button" class="btn btn-secondary quick-prompt-btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-radius: 20px;" onclick="FranklinApp.sendQuickPrompt('Proposa idees per reduir la volatilitat o fer un rebalanceig entre accions i fons.')">
+                ⚖️ Suggeriments de rebalanceig
+              </button>
+              <button type="button" class="btn btn-secondary quick-prompt-btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-radius: 20px;" onclick="FranklinApp.sendQuickPrompt('Analitza la meva assignació d\'actius i si està prou diversificada en efectiu, accions, ETFs i fons.')">
+                📊 Assignació d'Actius
+              </button>
+              <button type="button" class="btn btn-secondary quick-prompt-btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-radius: 20px;" onclick="FranklinApp.sendQuickPrompt('Quines idees o recomanacions em dones per optimitzar els meus estalvis i millorar el meu capital líquid actual?')">
+                💡 Consells d'Estalvi
+              </button>
+            </div>
+
+            <!-- Finestra de diàleg (Historial de missatges) -->
+            <div id="aiChatLog" style="flex: 1; min-height: 320px; max-height: 450px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.03); border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+              <!-- Missatges inicials es crearan dinàmicament -->
+            </div>
+
+            <!-- Input d'escriptura -->
+            <form id="aiChatForm" style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+              <input type="text" id="aiMessageInput" placeholder="Escriu la teva consulta sobre finances o inversions..." required style="flex: 1;">
+              <button type="submit" class="btn btn-primary" style="padding: 0.75rem 1.5rem;">
+                Enviar <i class="ri-send-plane-2-line"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PESTANYES D'ACTIUS ESPECÍFICS -->
+    <!-- ============================================== -->
+    
+    <!-- 2. ACCIONS -->
+    <div id="tab-accions" class="tab-content">
+      <div class="asset-summary-grid">
+        <div class="asset-summary-card accions">
+          <div class="asset-summary-title">Valor en Accions</div>
+          <div class="asset-summary-value" id="accionsTotalValue">0,00 €</div>
+        </div>
+        <div class="asset-summary-card accions">
+          <div class="asset-summary-title">Capital Invertit</div>
+          <div class="asset-summary-value" id="accionsTotalInvested">0,00 €</div>
+        </div>
+        <div class="asset-summary-card accions">
+          <div class="asset-summary-title">Rendiment Total</div>
+          <div class="asset-summary-value" id="accionsOverallYield">0,00 € (0.00%)</div>
+        </div>
+      </div>
+
+      <!-- Gràfic de Rendiment d'Accions -->
+      <div class="panel-card" style="margin-bottom: 1.5rem;">
+        <div class="panel-title-container">
+          <div>
+            <div class="panel-title"><i class="ri-bar-chart-2-line" style="color: var(--accent-primary); margin-right: 0.5rem; vertical-align: middle;"></i>Rendiment de les Accions (%)</div>
+            <div class="panel-subtitle">Guany o pèrdua percentual de cada acció individual a la cartera</div>
+          </div>
+        </div>
+        <div style="height: 180px; position: relative;">
+          <canvas id="accionsPerformanceChartCanvas"></canvas>
+        </div>
+      </div>
+      
+      <div class="panel-card">
+        <div class="panel-title-container">
+          <div class="panel-title">Posicions en Accions Individuals</div>
+        </div>
+        <div class="responsive-table-container">
+          <table class="modern-table" id="accionsTable">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Unitats</th>
+                <th>Preu Compra Mitjà</th>
+                <th>Preu Actual</th>
+                <th>Valor de Mercat</th>
+                <th style="text-align: center;">Diari</th>
+                <th style="text-align: center;">Setmanal</th>
+                <th style="text-align: center;">Mensual</th>
+                <th style="text-align: center;">YTD</th>
+                <th style="text-align: center;">Anual</th>
+                <th style="text-align: center;">Total</th>
+                <th style="width: 50px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Carregat dinàmicament per app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Panell per carregar dades específiques d'accions (CSV o Pegat) -->
+      <div class="panel-card" style="margin-top: 1.5rem;">
+        <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.85rem; margin-bottom: 1rem;">
+          <div>
+            <div class="panel-title"><i class="ri-upload-cloud-line" style="color: var(--accent-primary); margin-right: 0.5rem; vertical-align: middle;"></i>Carrega Dades d'Accions</div>
+            <div class="panel-subtitle">Enganxa columnes de fulls de càlcul (Excel) o puja un fitxer CSV específic d'accions</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <textarea id="pasteArea-accions" placeholder="ACTIU,ACCIONS,PREU MIG,PREU ARA € (opcional)&#10;AAPL,10,175.20,188.42&#10;NVDA,20,480.00,940.20" rows="3" style="font-family: monospace; font-size: 0.8rem; background: rgba(0,0,0,0.25); resize: vertical;"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div class="file-input-wrapper" style="position: relative; overflow: hidden; display: inline-block;">
+              <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 1rem;"><i class="ri-file-upload-line"></i> Puja fitxer CSV</button>
+              <input type="file" onchange="FranklinApp.importFromTabFileInput(this, 'accion')" accept=".csv" style="position: absolute; font-size: 100px; right: 0; top: 0; opacity: 0; cursor: pointer;">
+            </div>
+            <button type="button" class="btn btn-primary" onclick="FranklinApp.importFromTabPasteArea('accions', 'accion')" style="font-size: 0.8rem; padding: 0.5rem 1.25rem;">
+              <i class="ri-play-line"></i> Processa Dades Enganxades
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ETFs -->
+    <div id="tab-etfs" class="tab-content">
+      <div class="asset-summary-grid">
+        <div class="asset-summary-card etfs">
+          <div class="asset-summary-title">Valor en ETFs</div>
+          <div class="asset-summary-value" id="etfsTotalValue">0,00 €</div>
+        </div>
+        <div class="asset-summary-card etfs">
+          <div class="asset-summary-title">Capital Invertit</div>
+          <div class="asset-summary-value" id="etfsTotalInvested">0,00 €</div>
+        </div>
+        <div class="asset-summary-card etfs">
+          <div class="asset-summary-title">Rendiment Total</div>
+          <div class="asset-summary-value" id="etfsOverallYield">0,00 € (0.00%)</div>
+        </div>
+      </div>
+
+      <!-- Gràfic de Rendiment de ETFs -->
+      <div class="panel-card" style="margin-bottom: 1.5rem;">
+        <div class="panel-title-container">
+          <div>
+            <div class="panel-title"><i class="ri-bar-chart-2-line" style="color: var(--accent-secondary); margin-right: 0.5rem; vertical-align: middle;"></i>Rendiment de les ETFs (%)</div>
+            <div class="panel-subtitle">Guany o pèrdua percentual de cada ETF individual a la cartera</div>
+          </div>
+        </div>
+        <div style="height: 180px; position: relative;">
+          <canvas id="etfsPerformanceChartCanvas"></canvas>
+        </div>
+      </div>
+      
+      <div class="panel-card">
+        <div class="panel-title-container">
+          <div class="panel-title">Fons Cotitzats (ETFs)</div>
+        </div>
+        <div class="responsive-table-container">
+          <table class="modern-table" id="etfsTable">
+            <thead>
+              <tr>
+                <th>Fons / Ticker</th>
+                <th>Unitats</th>
+                <th>Preu Compra Mitjà</th>
+                <th>Preu Actual</th>
+                <th>Valor de Mercat</th>
+                <th style="text-align: center;">Diari</th>
+                <th style="text-align: center;">Setmanal</th>
+                <th style="text-align: center;">Mensual</th>
+                <th style="text-align: center;">YTD</th>
+                <th style="text-align: center;">Anual</th>
+                <th style="text-align: center;">Total</th>
+                <th style="width: 50px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Carregat dinàmicament per app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Panell per carregar dades específiques de ETFs (CSV o Pegat) -->
+      <div class="panel-card" style="margin-top: 1.5rem;">
+        <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.85rem; margin-bottom: 1rem;">
+          <div>
+            <div class="panel-title"><i class="ri-upload-cloud-line" style="color: var(--accent-secondary); margin-right: 0.5rem; vertical-align: middle;"></i>Carrega Dades de ETFs</div>
+            <div class="panel-subtitle">Enganxa columnes de fulls de càlcul (Excel) o puja un fitxer CSV específic de ETFs</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <textarea id="pasteArea-etfs" placeholder="ACTIU,ACCIONS,PREU MIG,PREU ARA € (opcional)&#10;VWCE,80,98.50,112.40&#10;CSSPX,45,410.20,465.30" rows="3" style="font-family: monospace; font-size: 0.8rem; background: rgba(0,0,0,0.25); resize: vertical;"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div class="file-input-wrapper" style="position: relative; overflow: hidden; display: inline-block;">
+              <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 1rem;"><i class="ri-file-upload-line"></i> Puja fitxer CSV</button>
+              <input type="file" onchange="FranklinApp.importFromTabFileInput(this, 'etf')" accept=".csv" style="position: absolute; font-size: 100px; right: 0; top: 0; opacity: 0; cursor: pointer;">
+            </div>
+            <button type="button" class="btn btn-primary" onclick="FranklinApp.importFromTabPasteArea('etfs', 'etf')" style="font-size: 0.8rem; padding: 0.5rem 1.25rem;">
+              <i class="ri-play-line"></i> Processa Dades Enganxades
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. FONS D'INVERSIÓ -->
+    <div id="tab-fons" class="tab-content">
+      <div class="asset-summary-grid">
+        <div class="asset-summary-card fons">
+          <div class="asset-summary-title">Valor en Fons</div>
+          <div class="asset-summary-value" id="fonsTotalValue">0,00 €</div>
+        </div>
+        <div class="asset-summary-card fons">
+          <div class="asset-summary-title">Capital Invertit</div>
+          <div class="asset-summary-value" id="fonsTotalInvested">0,00 €</div>
+        </div>
+        <div class="asset-summary-card fons">
+          <div class="asset-summary-title">Rendiment Total</div>
+          <div class="asset-summary-value" id="fonsOverallYield">0,00 € (0.00%)</div>
+        </div>
+      </div>
+
+      <!-- Gràfic de Rendiment de Fons -->
+      <div class="panel-card" style="margin-bottom: 1.5rem;">
+        <div class="panel-title-container">
+          <div>
+            <div class="panel-title"><i class="ri-bar-chart-2-line" style="color: var(--amber); margin-right: 0.5rem; vertical-align: middle;"></i>Rendiment dels Fons (%)</div>
+            <div class="panel-subtitle">Guany o pèrdua percentual de cada fons d'inversió a la cartera</div>
+          </div>
+        </div>
+        <div style="height: 180px; position: relative;">
+          <canvas id="fonsPerformanceChartCanvas"></canvas>
+        </div>
+      </div>
+      
+      <div class="panel-card">
+        <div class="panel-title-container">
+          <div class="panel-title">Cartera de Fons d'Inversió (Indexats i Actius)</div>
+        </div>
+        <div class="responsive-table-container">
+          <table class="modern-table" id="fonsTable">
+            <thead>
+              <tr>
+                <th>Fons d'Inversió (Nom / ISIN)</th>
+                <th>Unitats</th>
+                <th>Preu Compra Mitjà</th>
+                <th>Preu Actual</th>
+                <th>Valor de Mercat</th>
+                <th style="text-align: center;">Diari</th>
+                <th style="text-align: center;">Setmanal</th>
+                <th style="text-align: center;">Mensual</th>
+                <th style="text-align: center;">YTD</th>
+                <th style="text-align: center;">Anual</th>
+                <th style="text-align: center;">Total</th>
+                <th style="width: 150px; text-align: center;">Accions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Carregat dinàmicament per app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Panell per carregar dades específiques de Fons d'Inversió (CSV o Pegat) -->
+      <div class="panel-card" style="margin-top: 1.5rem;">
+        <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.85rem; margin-bottom: 1rem;">
+          <div>
+            <div class="panel-title"><i class="ri-upload-cloud-line" style="color: var(--amber); margin-right: 0.5rem; vertical-align: middle;"></i>Carrega Dades de Fons d'Inversió</div>
+            <div class="panel-subtitle">Enganxa columnes de fulls de càlcul (Excel) o puja un fitxer CSV de fons d'inversió</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <textarea id="pasteArea-fons" placeholder="ISIN,Nom,Últim valor&#10;LU1353950725,AXA WLD-GL INF SH DUR-AH,126209.00&#10;ES0174013021,CREAND RTA. FIXA MIXTA,130094.00" rows="3" style="font-family: monospace; font-size: 0.8rem; background: rgba(0,0,0,0.25); resize: vertical;"></textarea>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div class="file-input-wrapper" style="position: relative; overflow: hidden; display: inline-block;">
+              <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.5rem 1rem;"><i class="ri-file-upload-line"></i> Puja fitxer CSV</button>
+              <input type="file" onchange="FranklinApp.importFromTabFileInput(this, 'fons')" accept=".csv" style="position: absolute; font-size: 100px; right: 0; top: 0; opacity: 0; cursor: pointer;">
+            </div>
+            <button type="button" class="btn btn-primary" onclick="FranklinApp.importFromTabPasteArea('fons', 'fons')" style="font-size: 0.8rem; padding: 0.5rem 1.25rem;">
+              <i class="ri-play-line"></i> Processa Dades Enganxades
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. TRANSACCIONS -->
+    <div id="tab-transaccions" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-title-container">
+          <div>
+            <div class="panel-title">Historial de Transaccions</div>
+            <div class="panel-subtitle">Registre complet de compres i vendes realitzades</div>
+          </div>
+          <button class="btn btn-primary" onclick="FranklinApp.openModal('transactionModal')">
+            <i class="ri-add-line"></i> Nova Transacció
+          </button>
+        </div>
+        
+        <!-- Llistat de Transaccions -->
+        <div class="transactions-panel" id="transactionsList">
+          <!-- Carregat dinàmicament per app.js -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. OBJECTIUS -->
+    <div id="tab-objectius" class="tab-content">
+      <div class="panel-card">
+        <div class="panel-title-container">
+          <div>
+            <div class="panel-title">Objectius Financers</div>
+            <div class="panel-subtitle">Defineix metes per orientar la teva intel·ligència d'estalvi i inversió</div>
+          </div>
+          <button class="btn btn-primary" onclick="FranklinApp.openModal('goalModal')">
+            <i class="ri-flag-2-line"></i> Nou Objectiu
+          </button>
+        </div>
+        
+        <div class="goals-grid" id="goalsGrid">
+          <!-- Carregat dinàmicament per app.js -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PESTANYA 8: CONFIGURACIÓ -->
+    <!-- ============================================== -->
+    <div id="tab-configuracio" class="tab-content" style="gap: 2rem;">
+      <div class="panel-card" style="max-width: 600px;">
+        <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+          <div>
+            <div class="panel-title">Configuració del Sistema</div>
+            <div class="panel-subtitle">Administra les teves claus d'API i paràmetres tècnics</div>
+          </div>
+        </div>
+
+        <form id="saveSettingsForm" style="display: flex; flex-direction: column; gap: 1.5rem;">
+          <div class="form-group">
+            <label for="settingsOpenAIKey">Clau d'API d'OpenAI (sk-...)</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input type="password" id="settingsOpenAIKey" placeholder="sk-proj-..." style="padding-right: 3rem;">
+              <button type="button" id="btnToggleKeyVisibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; padding: 0.25rem; z-index: 10;">
+                <i class="ri-eye-off-line"></i>
+              </button>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.4rem; line-height: 1.4;">
+              La teva clau d'API es guarda de manera <strong>estrictament local</strong> al teu propi navegador web (`localStorage`). Franklin Finances mai transmet aquesta informació a cap servidor que no sigui l'oficial d'OpenAI (`api.openai.com`).
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="settingsModel">Model de Llenguatge (OpenAI)</label>
+            <select id="settingsModel" required>
+              <option value="gpt-4o-mini">gpt-4o-mini (Recomanat - Ràpid i econòmic)</option>
+              <option value="gpt-4o">gpt-4o (Alta intel·ligència - Major cost)</option>
+            </select>
+          </div>
+
+          <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" onclick="FranklinApp.switchTab('resum')">Enrere</button>
+            <button type="submit" class="btn btn-primary">Desar Paràmetres</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel-card" style="max-width: 600px;">
+        <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+          <div>
+            <div class="panel-title">Còpies de Seguretat i Importació</div>
+            <div class="panel-subtitle">Gestiona les teves dades a través de fitxers JSON o CSV</div>
+          </div>
+        </div>
+
+        <!-- Secció JSON (Full state copy) -->
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 2rem;">
+          <label style="font-size: 0.9rem; color: white;"><i class="ri-database-2-line" style="color: var(--accent-primary); margin-right: 0.5rem; vertical-align: middle;"></i>Còpia de Seguretat Completa (JSON)</label>
+          <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+            Exporta tot el teu estat (comptes, historial de transaccions, objectius i claus configurades) a un fitxer, o puja'n un de preexistent per restaurar la teva cartera.
+          </p>
+          <div style="display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" onclick="FranklinApp.exportStateToJSON()">
+              <i class="ri-download-cloud-2-line"></i> Exporta Dades (JSON)
+            </button>
+            
+            <div class="file-input-wrapper" style="position: relative; overflow: hidden; display: inline-block;">
+              <button type="button" class="btn btn-secondary">
+                <i class="ri-upload-cloud-2-line"></i> Importa JSON
+              </button>
+              <input type="file" id="importJSONInput" accept=".json" style="position: absolute; font-size: 100px; right: 0; top: 0; opacity: 0; cursor: pointer;">
+            </div>
+
+            <button type="button" class="btn btn-secondary" onclick="FranklinApp.exportHoldingsToCSV()">
+              <i class="ri-file-download-line"></i> Exporta Posicions (CSV)
+            </button>
+
+            <button type="button" class="btn" onclick="FranklinApp.clearAllData()" style="background: var(--crimson-gradient); box-shadow: var(--crimson-glow); border-color: rgba(239, 68, 68, 0.4); color: white;">
+              <i class="ri-delete-bin-line"></i> Neteja Dades (Comença de Nou)
+            </button>
+          </div>
+        </div>
+
+        <!-- Secció CSV (Transactions import) -->
+        <div style="display: flex; flex-direction: column; gap: 1rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.5rem;">
+          <label style="font-size: 0.9rem; color: white;"><i class="ri-file-excel-2-line" style="color: var(--emerald); margin-right: 0.5rem; vertical-align: middle;"></i>Importació Massiva de Transaccions (CSV)</label>
+          <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+            Pujar fitxers CSV per afegir noves transaccions al teu historial. Es recomana fer servir la nostra plantilla per evitar errors en el format de les columnes.
+          </p>
+          
+          <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="FranklinApp.downloadCSVTemplate()">
+              <i class="ri-file-download-line"></i> Descarrega Plantilla CSV
+            </button>
+          </div>
+
+          <!-- Zona Drag & Drop interactiva -->
+          <div id="csvDropZone" class="drop-zone" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 2rem 1.5rem; text-align: center; background: rgba(255,255,255,0.01); transition: var(--transition-smooth); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; position: relative;">
+            <div class="kpi-icon emerald" style="width: 44px; height: 44px; font-size: 1.5rem; background: rgba(16, 185, 129, 0.12); color: var(--emerald); margin: 0 auto;"><i class="ri-upload-2-line"></i></div>
+            <div style="font-family: var(--font-heading); font-weight: 600; font-size: 0.85rem; color: white;" id="csvDropZoneText">Arrossega el teu fitxer CSV aquí</div>
+            <div style="font-size: 0.75rem; color: var(--text-dim);" id="csvDropZoneSubText">o fes clic per buscar a l'ordinador</div>
+            <input type="file" id="importCSVInput" accept=".csv" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer; z-index: 5;">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card" style="max-width: 600px; margin-top: 1.5rem;">
+        <div class="panel-title-container" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+          <div>
+            <div class="panel-title"><i class="ri-lock-2-line" style="color: var(--accent-secondary); margin-right: 0.5rem; vertical-align: middle;"></i>Seguretat de la Cartera</div>
+            <div class="panel-subtitle">Gestiona la teva sessió d'inici encriptada per a la seguretat en GitHub</div>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; margin: 0;">
+            Aquesta instància es troba encriptada criptogràficament de manera local. Si tanques la sessió o la pestanya del navegador, caldrà tornar a introduir la contrasenya d'accés per poder consultar els teus saldos o fer qualsevol operació.
+          </p>
+          <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+            <button type="button" class="btn btn-secondary" onclick="FranklinApp.handleLogout()" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              <i class="ri-logout-box-r-line" style="color: var(--accent-secondary);"></i> Tanca la Sessió de Seguretat
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ============================================== -->
+  <!-- MODALS DE DIÀLEG D'INTERACCIÓ -->
+  <!-- ============================================== -->
+
+  <!-- A. MODAL REGISTRE DE TRANSACCIÓ -->
+  <div class="modal-overlay" id="transactionModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Registrar Nova Transacció</h3>
+        <button class="btn-close-modal" onclick="FranklinApp.closeModal('transactionModal')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="addTransactionForm">
+        <div class="modal-body">
+          <!-- Preselecció d'Actiu existent o disponible -->
+          <div class="form-group" style="margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 1.25rem;">
+            <label for="txAssetSelect" style="color: var(--accent-secondary); font-weight: 700;">
+              <i class="ri-play-list-add-line"></i> Preselecciona un actiu existent o disponible (Opcional)
+            </label>
+            <select id="txAssetSelect" style="margin-top: 0.5rem; width: 100%;">
+              <option value="">— Tria un actiu existent o comú —</option>
+            </select>
+          </div>
+
+          <!-- Cerca i Auto-omple per ISIN -->
+          <div class="form-group" style="margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 1.25rem;">
+            <label for="txIsinSearch" style="color: var(--accent-primary); font-weight: 700;"><i class="ri-search-eye-line"></i> Cerca i Autoomple per ISIN (Opcional)</label>
+            <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+              <input type="text" id="txIsinSearch" placeholder="Ex: US0378331005, IE00B3XXRP09..." style="text-transform: uppercase; flex: 1;">
+              <button type="button" class="btn btn-primary" onclick="FranklinApp.searchAndAutofillISIN()" style="padding: 0.5rem 1.25rem; font-size: 0.8rem;">
+                <i class="ri-search-line"></i> Cerca ISIN
+              </button>
+            </div>
+            <div id="isinSearchFeedback" style="font-size: 0.75rem; margin-top: 0.5rem; display: none; line-height: 1.4;"></div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="txAssetType">Tipus d'Actiu</label>
+              <select id="txAssetType" required>
+                <option value="accion">Acció Individual</option>
+                <option value="etf">ETF (Fons Cotitzat)</option>
+                <option value="fons">Fons d'Inversió</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="txType">Tipus d'Operació</label>
+              <select id="txType" required>
+                <option value="compra">Compra</option>
+                <option value="venda">Venda</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="txIsin">Codi ISIN</label>
+              <input type="text" id="txIsin" placeholder="Ex: US0378331005" style="text-transform: uppercase;">
+            </div>
+            <div class="form-group">
+              <label for="txSymbol">Ticker / Símbol</label>
+              <input type="text" id="txSymbol" placeholder="Ex: AAPL, VWCE" required>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="txName">Nom de l'Actiu</label>
+              <input type="text" id="txName" placeholder="Ex: Apple Inc." required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="txQty">Quantitat / Unitats</label>
+              <input type="number" id="txQty" step="any" min="0.0001" placeholder="0.00" required>
+            </div>
+            <div class="form-group">
+              <label for="txPrice">Preu Unitari</label>
+              <input type="number" id="txPrice" step="any" min="0.01" placeholder="0.00" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="txCommission">Comissions</label>
+              <input type="number" id="txCommission" step="any" min="0" value="0.00">
+            </div>
+            <div class="form-group">
+              <label for="txCurrency">Divisa</label>
+              <select id="txCurrency" required>
+                <option value="EUR">Euros (€)</option>
+                <option value="USD">Dòlars ($)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="txDate">Data</label>
+              <input type="date" id="txDate" required>
+            </div>
+            <div class="form-group" style="justify-content: center; align-items: flex-start; padding-top: 1.5rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="txLinkCash" checked style="width: auto; cursor: pointer;">
+                Enllaça amb Compte d'Efectiu
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="txNotes">Comentaris / Notes</label>
+            <textarea id="txNotes" placeholder="Afegeix algun detall sobre l'operació..." rows="2"></textarea>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="FranklinApp.closeModal('transactionModal')">Cancel·lar</button>
+          <button type="submit" class="btn btn-primary">Guardar Operació</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- B. MODAL AJUST DIRECTE D'EFECTIU -->
+  <div class="modal-overlay" id="cashModal">
+    <div class="modal-card" style="width: 400px;">
+      <div class="modal-header">
+        <h3>Ajustar Saldo de Comptes d'Efectiu</h3>
+        <button class="btn-close-modal" onclick="FranklinApp.closeModal('cashModal')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="updateCashForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="newCashAmount">Saldo Total en Efectiu (EUR)</label>
+            <input type="number" id="newCashAmount" step="0.01" min="0" placeholder="0.00" required>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">Introduir el total consolidat dels teus comptes bancaris.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="FranklinApp.closeModal('cashModal')">Enrere</button>
+          <button type="submit" class="btn btn-primary">Actualitzar Saldo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- C. MODAL AFECTAR NOU OBJECTIU -->
+  <div class="modal-overlay" id="goalModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Definir Nou Objectiu Financer</h3>
+        <button class="btn-close-modal" onclick="FranklinApp.closeModal('goalModal')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="addGoalForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="goalTitle">Títol de l'Objectiu</label>
+            <input type="text" id="goalTitle" placeholder="Ex: Entrada del cotxe, Viatge a Nova York" required>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="goalTarget">Quantitat Objectiu (EUR)</label>
+              <input type="number" id="goalTarget" min="1" placeholder="Ex: 15000" required>
+            </div>
+            <div class="form-group">
+              <label for="goalCategory">Categoria</label>
+              <select id="goalCategory" required>
+                <option value="Curt termini">Curt termini (&lt; 1 any)</option>
+                <option value="Mig termini">Mig termini (1 a 5 anys)</option>
+                <option value="Llarg termini">Llarg termini (&gt; 5 anys)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="goalDeadline">Data Límit</label>
+              <input type="date" id="goalDeadline" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="goalNotes">Descripció o Plà d'Acció</label>
+            <textarea id="goalNotes" placeholder="Especifica com tens pensat aconseguir-ho..." rows="3"></textarea>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="FranklinApp.closeModal('goalModal')">Cancel·lar</button>
+          <button type="submit" class="btn btn-primary">Crear Objectiu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- D. MODAL HISTÒRIC DE FONS D'INVERSIÓ -->
+  <div class="modal-overlay" id="fundHistoryModal">
+    <div class="modal-card" style="width: 700px; max-width: 95%;">
+      <div class="modal-header">
+        <h3 id="historyModalTitle">Historial del Fons</h3>
+        <button class="btn-close-modal" onclick="FranklinApp.closeModal('fundHistoryModal')"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+          <div class="kpi-card" style="padding: 1rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Preu Actual</div>
+            <div id="histCurrentPrice" style="font-family: var(--font-heading); font-weight: 700; font-size: 1.15rem; margin-top: 0.25rem;">0,00 €</div>
+          </div>
+          <div class="kpi-card" style="padding: 1rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Rendiment Anual</div>
+            <div id="histAnnualYield" style="font-family: var(--font-heading); font-weight: 700; font-size: 1.15rem; margin-top: 0.25rem;">0.00%</div>
+          </div>
+          <div class="kpi-card" style="padding: 1rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Màxim Anual</div>
+            <div id="histMaxPrice" style="font-family: var(--font-heading); font-weight: 700; font-size: 1.15rem; margin-top: 0.25rem;">0,00 €</div>
+          </div>
+          <div class="kpi-card" style="padding: 1rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Mínim Anual</div>
+            <div id="histMinPrice" style="font-family: var(--font-heading); font-weight: 700; font-size: 1.15rem; margin-top: 0.25rem;">0,00 €</div>
+          </div>
+        </div>
+
+        <div style="height: 320px; position: relative; background: rgba(0,0,0,0.15); border-radius: 12px; padding: 1rem; border: 1px solid rgba(255,255,255,0.03);">
+          <canvas id="fundHistoryChartCanvas"></canvas>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="FranklinApp.closeModal('fundHistoryModal')">Tancar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Càrrega de scripts (En ordre per garantir dependències) -->
+  <script src="data.js"></script>
+  <script src="charts.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
